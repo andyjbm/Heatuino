@@ -31,9 +31,9 @@ void loop() {
     Serial.print(F("EMONCMS: 11 "));
     Serial.print(SystemState);
     Serial.print(F(" "));
-    Serial.print(TankStat.GetStatState());
+    Serial.print(TankStat.GetStatSecretState());
     Serial.print(F(" "));
-    Serial.println(RoomStat.GetStatState());
+    Serial.println(RoomStat.GetStatSecretState());
   }
 
 }
