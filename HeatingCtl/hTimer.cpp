@@ -11,6 +11,10 @@ void hTimer::SetCounter(unsigned long hCount){
 }
     
 bool hTimer::timeup() {return  (millis() - counter > _target);}
+
+bool hTimer::timeup(unsigned long thisTarget) {return (millis() - counter > thisTarget);}
+
+
  
 
 

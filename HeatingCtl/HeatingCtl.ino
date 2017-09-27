@@ -3,7 +3,11 @@
 
 /*
  * 
- * Version 0.1
+ * Version 0.4
+ * 
+ * Mod to use Prerun for the 1st minute of CH demand
+ * so that wnen the HR80s are cycling 1 minute in 10
+ * we use heat from the boiler without firing.
  * 
  */
 
@@ -11,6 +15,13 @@
 #include "TwoPort.h"
 #include "hTimer.h"
 
+#define PRERUN_CH   700000 // 1 minute 10 seconds prerun for CH to determine if we are doing 1 min DEMAND in 10 cycling.
+#define PRERUN_HW   5000   // 5 seconds prerun.
+
+#define STATDELAY_CH 0     //Delay was 1 minute 30 Sec. To defeat stupid Honeywell cycling. Now handled by extended prerun for CH
+#define STATDELAY_HW 0     //
+
+#define OVERRUN 300000     // 5 minutes overrun, 
 
 //Inputs
 #define Motor1OpenPin     2   //PD2
@@ -36,17 +47,20 @@
 
 
 //Globals
-Stat TankStat("TankStat", 0, TankStatPin);
-Stat RoomStat("RoomStat", 90000, RoomStatPin); //Delay is 1 minute 30 Sec. To defeat stupid Honeywell cycling.
+Stat TankStat("TankStat", STATDELAY_HW, TankStatPin);
+Stat RoomStat("RoomStat", STATDELAY_CH, RoomStatPin); 
 
 TwoPort PortHW("HW", Motor1Pin, Motor1OpenPin, Motor1ClosedPin);
 TwoPort PortCH("CH", Motor2Pin, Motor2OpenPin, Motor2ClosedPin);
 
 hTimer htTimer;
+hTimer chTimer;
 
 enum SystemStates {SYSTEM_OFF, SYSTEM_PRERUN, SYSTEM_ON, SYSTEM_OVERRUN, SYSTEM_IDLE};
 
 SystemStates SystemState;
+
+StatStates RoomStat_StateAtStartOfOverrun;
 
 
 String ReturnSystemState(SystemStates State){
@@ -71,7 +85,6 @@ void MoveTo(SystemStates NewState){
     case SYSTEM_PRERUN:
        digitalWrite(PumpPin, LOW); //Pump ON
        SystemState = SYSTEM_PRERUN;
-       htTimer.SetCounter(5 * 1000); // 5 Seconds
        break;
        
     case SYSTEM_ON:
@@ -82,7 +95,8 @@ void MoveTo(SystemStates NewState){
     case SYSTEM_OVERRUN:
        digitalWrite(BoilerPin, HIGH); //Boiler OFF
        SystemState = SYSTEM_OVERRUN;
-       htTimer.SetCounter(300000); // 5 Minutes Overrun
+       htTimer.SetCounter(OVERRUN); // 5 Minutes Overrun
+       RoomStat_StateAtStartOfOverrun = RoomStat.GetStatState();
        break;
 
     case SYSTEM_IDLE:
@@ -92,7 +106,7 @@ void MoveTo(SystemStates NewState){
        break;
 
     case SYSTEM_OFF:
-      //Just make sure they didn't get opened and abandoned when in IDLE.
+      //Just make sure they didn't get opened and abandoned when in OVERRUN or IDLE.
       PortHW.Request(CLOSE);
       PortCH.Request(CLOSE);
       SystemState = SYSTEM_OFF;
@@ -107,12 +121,14 @@ void checkSystem(){
     
        if (RoomStat.GetStatState() == DEMAND) 
          if (PortCH.Request(OPEN)){
-           MoveTo(SYSTEM_PRERUN);  
+           MoveTo(SYSTEM_PRERUN);
+           htTimer.SetCounter( PRERUN_CH ); // 1:10 for CH Prerun
            break;
          }
        if (TankStat.GetStatState() == DEMAND)
           if (PortHW.Request(OPEN)){
             MoveTo(SYSTEM_PRERUN);
+            htTimer.SetCounter( PRERUN_HW ); 
             break;
           }
        break;   
@@ -121,6 +137,9 @@ void checkSystem(){
        if (htTimer.timeup()) MoveTo(SYSTEM_ON);
        if (PortCH.RequestedState == CLOSE and RoomStat.GetStatState() == DEMAND) PortCH.Request(OPEN);
        if (PortHW.RequestedState == CLOSE and TankStat.GetStatState() == DEMAND) PortHW.Request(OPEN);
+
+       // In the case where we are on CH demand and during the longer prerun wait the TankStat opens, we check to see if we have ALREADY waited long enough for TankStat Prerun.
+       if (PortHW.RequestedState == OPEN and htTimer.timeup( PRERUN_HW )) MoveTo(SYSTEM_ON);
        break;
        
     case SYSTEM_ON:
@@ -158,18 +177,31 @@ void checkSystem(){
 
        // Look for CH DEMAND again...
        if (RoomStat.GetStatState() == DEMAND) {
+         if (RoomStat_StateAtStartOfOverrun == NODEMAND) {
+            // RoomStat just asked for demand so start a prerun timer (to avoid 1 in 10 cycling) and time this inside SYSTEM_OVERRUN
+            chTimer.SetCounter(PRERUN_CH);
+            RoomStat_StateAtStartOfOverrun = DEMAND;
+         }   
          if (PortCH.Request(OPEN)) {
-            if (TankStat.GetStatState() == NODEMAND) //Close HW before turning the boilder back on. If there is HW demand before we get here we would have already gone back to SYSTEM_ON from code further down.
-               if (PortHW.Request(CLOSE)) MoveTo(SYSTEM_ON);
+            if (TankStat.GetStatState() == NODEMAND) 
+               // Close HW before turning the boilder back on. 
+               // If there is HW demand before we get here we would have already gone back to SYSTEM_ON from code further down.
+               if (PortHW.Request(CLOSE)) {
+                  //Wait for PRERUN to expire before firing the boiler. This allows the OVERRUN to be the source of heat for 1 in 10 cycling.
+                  //Note that even if the OVERRUN timer expires before this PRERUN expires we will stay here because RoomStat is in DEMAND.
+                  if (chTimer.timeup()) MoveTo(SYSTEM_ON);
+               }
          }
        } else { //No CH Demand so carry on with Overrun
         
           // Open the HW port and when that's done, close the CH port.
           if (PortHW.Request(OPEN)) PortCH.Request(CLOSE);
        }
-       
+
+       //Note a DEMAND from TankStat moves to SYSTEM_ON without a PRERUN as there will be no 1 in 10 cycling from a HW request!
        if (TankStat.GetStatState() == DEMAND) if (PortHW.Request(OPEN)) MoveTo(SYSTEM_ON); // This is the state we will probably be in here so this should move straight to SYSTEM_ON.
-       
+
+       //if there is no further demand, move to IDLE when the OVERRUN time expires.
        if (RoomStat.GetStatState() == NODEMAND and TankStat.GetStatState() == NODEMAND and htTimer.timeup()) MoveTo(SYSTEM_IDLE);
        break;
     
