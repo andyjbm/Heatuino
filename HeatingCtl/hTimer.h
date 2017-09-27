@@ -14,6 +14,7 @@ class hTimer {
   public:
     void SetCounter(unsigned long hCount);
     bool timeup();
+    bool timeup(unsigned long thisTarget);
   
 };
 
