@@ -2,9 +2,9 @@
 Central heating control on an Arduino
 
 V0.4
-Change so that 1 in 10 cycling uses residual heat from the boiler for the 1st minute (or stays in overrun) 
-and doesn't call for heat until the second minute.
-Most timing values moved to #defines at the start of the project file.
+Change so that 1 minute in 10 cycling uses residual heat from the boiler for the 1st minute (or stays in overrun) 
+and doesn't call for heat until into the second minute.
+Most timing values moved to #define constants at the start of the project file.
 
 V0.3
 Mainly added a delay to the stat class to be able to wait for DEMAND to be longer than a minute before responding.
