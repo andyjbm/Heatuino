@@ -36,8 +36,8 @@
 
 
 //Globals
-Stat TankStat("TankStat", TankStatPin);
-Stat RoomStat("RoomStat", RoomStatPin);
+Stat TankStat("TankStat", 0, TankStatPin);
+Stat RoomStat("RoomStat", 90000, RoomStatPin); //Delay is 1 minute 30 Sec. To defeat stupid Honeywell cycling.
 
 TwoPort PortHW("HW", Motor1Pin, Motor1OpenPin, Motor1ClosedPin);
 TwoPort PortCH("CH", Motor2Pin, Motor2OpenPin, Motor2ClosedPin);
