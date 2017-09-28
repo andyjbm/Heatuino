@@ -15,7 +15,7 @@
 #include "TwoPort.h"
 #include "hTimer.h"
 
-#define PRERUN_CH   700000 // 1 minute 10 seconds prerun for CH to determine if we are doing 1 min DEMAND in 10 cycling.
+#define PRERUN_CH   70000 // 1 minute 10 seconds prerun for CH to determine if we are doing 1 min DEMAND in 10 cycling.
 #define PRERUN_HW   5000   // 5 seconds prerun.
 
 #define STATDELAY_CH 0     //Delay was 1 minute 30 Sec. To defeat stupid Honeywell cycling. Now handled by extended prerun for CH
