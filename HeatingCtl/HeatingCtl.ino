@@ -210,13 +210,19 @@ void checkSystem(){
        if (RoomStat.GetStatState() == DEMAND) {
          //There is demand for CH so close HW while CH opens...
          if (TankStat.GetStatState() == NODEMAND) PortHW.Request(CLOSE);
-         if (PortCH.Request(OPEN)) MoveTo(SYSTEM_PRERUN);  
+         if (PortCH.Request(OPEN)) {
+            MoveTo(SYSTEM_PRERUN);  
+            htTimer.SetCounter( PRERUN_CH ); // 1:10 for CH Prerun
+         }
        }
        
        if (TankStat.GetStatState() == DEMAND) {
          //There is demand for HW so close CH while HW opens...
          if (RoomStat.GetStatState() == NODEMAND) PortCH.Request(CLOSE); 
-          if (PortHW.Request(OPEN)) MoveTo(SYSTEM_PRERUN);
+          if (PortHW.Request(OPEN)) {
+             MoveTo(SYSTEM_PRERUN);
+             htTimer.SetCounter( PRERUN_HW );
+          }
        }
 
        //Otherwise we're all done.   
